@@ -1,3 +1,11 @@
+# 动态列表，最新的排在最上面。
+# content 支持 Markdown，可以插入图片、视频。
+- date: 2026-10-07 12:00:00
+  content: |-
+    试着发一条带图的动态，两张图会自动排成网格。
+
+    ![](/img/gallery/photo-01.svg)
+    ![](/img/gallery/photo-02.svg)
 - date: 2026-10-06 23:30:00
   content: 把 <code>Cromy233.github.io</code> 从那个「原神启动装置」的整蛊页换成了 Hexo + Butterfly 的博客，现在有日记、文章、相册、音乐和视频几个板块了。
   tags:
