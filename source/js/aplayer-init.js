@@ -4,15 +4,9 @@
 (function () {
   var PLAYLIST = [
     {
-      name: '神父雷蒙德战斗BGM（一）',
+      name: '神父雷蒙德战斗BGM',
       artist: '边狱巴士 第十章',
-      url: '/music/084ost_theChaplain_0.mp3',
-      cover: '/img/music-cover.svg'
-    },
-    {
-      name: '神父雷蒙德战斗BGM（二）',
-      artist: '边狱巴士 第十章',
-      url: '/music/084ost_theChaplain_1.mp3',
+      url: '/music/084ost_theChaplain.mp3',
       cover: '/img/music-cover.svg'
     }
   ]

@@ -1,0 +1,8 @@
+# Keep content files on LF endings.
+#
+# admin/server.js writes posts, pages and the moments file with LF. Without
+# this, git's core.autocrlf would make every save from the admin look like a
+# modification even when the content is byte-for-byte the same.
+*.md    text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf

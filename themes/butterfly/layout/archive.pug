@@ -1,0 +1,15 @@
+extends includes/layout.pug
+
+include ./includes/mixins/home-card.pug
+
+//- The 文章 page. Renders the same cards as the homepage, so the two match.
+//- Pagination is driven by the usual `per_page` setting in _config.yml.
+
+block content
+  #article-container.home-feed
+    if !page.posts || !page.posts.length
+      .home-feed-empty
+        p 还没有文章。
+
+    each post in page.posts.toArray()
+      +postCard(post)

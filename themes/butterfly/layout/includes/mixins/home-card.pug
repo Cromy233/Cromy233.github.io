@@ -1,0 +1,32 @@
+//- Card markup shared by the homepage feed (layout/index.pug) and the
+//- 文章 / archive page (layout/archive.pug).
+//-
+//- Blog posts keep their categories. Moments carry no taxonomy.
+
+mixin postCard(post)
+  article.home-card.home-card--post
+    .home-card-meta
+      span.home-badge.home-badge--post 文章
+      time(datetime=date_xml(post.date))= date(post.date, config.date_format)
+    h2.home-card-title
+      a(href=url_for(post.path))= post.title || '(无标题)'
+    .home-card-body
+      if post.excerpt
+        != post.excerpt
+      else
+        p= truncate(strip_html(post.content), { length: 200 })
+    if post.categories && post.categories.length
+      .home-card-tax
+        each cat in post.categories.toArray()
+          a.home-chip(href=url_for(cat.path))= cat.name
+    a.home-card-more(href=url_for(post.path))
+      span 阅读全文
+      i.fas.fa-angle-right
+
+mixin momentCard(moment)
+  article.home-card.home-card--moment
+    .home-card-meta
+      span.home-badge.home-badge--moment 动态
+      a.home-card-date(href=url_for('/moments/'))
+        time(datetime=date_xml(moment.date))= date(moment.date, config.date_format)
+    .home-card-body!= moment.content

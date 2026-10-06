@@ -1,0 +1,9 @@
+//- Slide-out menu sidebar.
+//- Trimmed down to just the navigation: the avatar and the
+//- article / tag / category counters that normally sit on top were removed
+//- because the homepage already carries the profile and the feed.
+if theme.menu
+  #sidebar
+    #menu-mask
+    #sidebar-menus
+      != partial('includes/header/menu_item', {}, { cache: true })

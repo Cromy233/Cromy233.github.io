@@ -40,7 +40,7 @@ home_hero:
   # Avatar. A GitHub avatar URL works: https://github.com/<username>.png
   avatar: https://github.com/Cromy233.png
   name: 晓光
-  subtitle: 折腾 Hexo、Minecraft，和一些没用的东西
+  subtitle: 不知道写点什么...
   # Shown right under the subtitle
   birthday: 2/29
   # Links under the name. `icon` accepts any Font Awesome class.
@@ -314,7 +314,7 @@ aside:
     category: true
   card_author:
     enable: false
-    description: 折腾 Hexo、Minecraft，和一些没用的东西
+    description: 大概是一个博客
     button:
       enable: true
       icon: fab fa-github
@@ -322,7 +322,7 @@ aside:
       link: https://github.com/Cromy233
   card_announcement:
     enable: true
-    content: 欢迎来到我的小站 ✨
+    content: hello
   card_recent_post:
     enable: true
     # If set 0 will show all
@@ -805,7 +805,7 @@ site_verification:
 
 theme_color:
   enable: true
-  main: "#FFB900"
+  main: "#F6C181"
   # paginator: "#00c4b6"
   # button_hover: "#FF7242"
   # text_selection: "#00c4b6"

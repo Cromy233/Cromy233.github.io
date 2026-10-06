@@ -1,0 +1,25 @@
+extends includes/layout.pug
+
+include ./includes/mixins/home-card.pug
+
+//- Custom homepage: a merged, reverse-chronological timeline of blog posts and
+//- moments (source/_data/shuoshuo.yml). The merged data comes from the
+//- homeFeed() helper registered in scripts/home-feed.js.
+//-
+//- The container keeps id="article-container" on purpose: the theme's main.js
+//- runs its lightbox and justified-gallery setup against that id, so images -
+//- and the {% gallery %} tag - work inside moments on the homepage too.
+
+block content
+  - const feed = homeFeed({})
+
+  #article-container.home-feed
+    if !feed.length
+      .home-feed-empty
+        p 还没有内容。去 <code>source/_posts/</code> 写篇文章，或者在 <code>source/_data/shuoshuo.yml</code> 记一条动态吧。
+
+    each entry in feed
+      if entry.type === 'post'
+        +postCard(entry.post)
+      else
+        +momentCard(entry.moment)
