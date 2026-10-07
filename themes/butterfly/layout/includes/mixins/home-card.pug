@@ -14,7 +14,9 @@ mixin postCard(post)
       if post.excerpt
         != post.excerpt
       else
-        p= truncate(strip_html(post.content), { length: 200 })
+        //- Butterfly re-registers the global `truncate` helper with the
+        //- signature (content, length), so the length must be a plain number.
+        p= truncate(strip_html(post.content).trim(), 200)
     if post.categories && post.categories.length
       .home-card-tax
         each cat in post.categories.toArray()

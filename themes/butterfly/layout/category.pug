@@ -1,12 +1,15 @@
 extends includes/layout.pug
 
+include ./includes/mixins/home-card.pug
+
+//- A single category's post list. Renders the same cards as the 文章 page so
+//- the two match; there is deliberately no timeline variant here.
+
 block content
-  if theme.category_ui == 'index'
-    include ./includes/mixins/indexPostUI.pug
-    +indexPostUI
-  else
-    include ./includes/mixins/article-sort.pug
-    #category
-      .article-sort-title= _p('page.category') + ' - ' + page.category
-      +articleSort(page.posts)
-      include includes/pagination.pug
+  #article-container.home-feed
+    if !page.posts || !page.posts.length
+      .home-feed-empty
+        p 这个分类下还没有文章。
+
+    each post in page.posts.toArray()
+      +postCard(post)

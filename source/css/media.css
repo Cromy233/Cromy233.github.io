@@ -1,0 +1,83 @@
+/* ============================================================
+   Media: audio / video players, NetEase embeds, image viewer chrome.
+   Injected on every page via inject.head in _config.butterfly.yml.
+   ============================================================ */
+
+/* ---------- image viewer (Fancybox 6) ---------- */
+
+/* The toolbar row is removed in themes/butterfly/source/js/utils.js. Fancybox
+   then shows its own standalone close button; pin it to the corner of the
+   screen and make it round. */
+.fancybox__container .f-button.is-close-button {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 20;
+  --f-close-button-width: 42px;
+  --f-close-button-height: 42px;
+  --f-close-button-svg-width: 20px;
+  --f-close-button-svg-height: 20px;
+  --f-close-border-radius: 50%;
+  --f-close-button-bg: rgba(0, 0, 0, .45);
+  --f-close-button-hover-bg: rgba(0, 0, 0, .75);
+  --f-close-button-active-bg: rgba(0, 0, 0, .85);
+  --f-close-button-color: #fff;
+  --f-close-button-hover-color: #fff;
+  backdrop-filter: blur(4px);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, .35);
+}
+
+/* the slide no longer needs room reserved for an inline close button */
+.fancybox__container .fancybox__slide.has-close-btn { padding-top: 0; }
+
+/* ---------- inline players ---------- */
+
+/* Audio and video inserted by the admin (or written by hand) should fill the
+   column and sit on their own line, like the justified image rows do.
+   Descendant selectors, because markdown wraps a lone element in a <p>. */
+#article-container audio,
+#article-container video,
+.home-card-body audio,
+.home-card-body video,
+.shuoshuo-content audio,
+.shuoshuo-content video {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  margin: 14px 0;
+  border-radius: 8px;
+}
+
+/* The native controls are browser chrome we cannot restyle, so deliberately no
+   fixed height or background here - that clips the player in some browsers. */
+.home-card-body p > audio,
+.home-card-body p > video,
+.shuoshuo-content p > audio,
+.shuoshuo-content p > video {
+  margin: 10px 0;
+}
+
+/* ---------- NetEase Cloud Music embed ({% netease %} tag) ---------- */
+
+.netease-embed {
+  margin: 16px 0;
+}
+
+.netease-embed iframe {
+  display: block;
+  width: 100%;
+  max-width: 520px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--card-bg);
+}
+
+/* a playlist embed is tall; let it use more of the column */
+.netease-embed--list iframe {
+  max-width: 560px;
+}
+
+.home-card-body .netease-embed,
+.shuoshuo-content .netease-embed {
+  margin: 12px 0;
+}

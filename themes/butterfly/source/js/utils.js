@@ -247,32 +247,35 @@
               hideScrollbar: false
             }
           } else {
+            // Fancybox 6 forwards the *nested* `Carousel` options to the inner
+            // carousel, and that carousel is what renders the toolbar and the
+            // album strip. Top-level copies of these keys are only read by the
+            // Fancybox shell, so the settings have to live inside `Carousel`.
             options = {
               Hash: false,
               Carousel: {
                 transition: 'slide',
-                Thumbs: {
-                  showOnStart: false
-                },
-                Toolbar: {
-                  display: {
-                    left: ['counter'],
-                    middle: [
-                      'zoomIn',
-                      'zoomOut',
-                      'toggle1to1',
-                      'rotateCCW',
-                      'rotateCW',
-                      'flipX',
-                      'flipY',
-                      'reset'
-                    ],
-                    right: ['autoplay', 'thumbs', 'close']
-                  }
-                },
+                // Fancybox picks the slide direction by comparing numeric
+                // indices, so with exactly two images BOTH buttons wrap 1 -> 2
+                // and the animation always plays the same way. Turning looping
+                // off makes left/right consistently animate left/right.
+                infinite: false,
+                // No toolbar row at all. Fancybox then renders its own
+                // standalone close button (closeButton defaults to 'auto',
+                // which means "only when the toolbar is gone"); it is restyled
+                // into a round button in source/css/media.css.
+                Toolbar: false,
+                // no thumbnail strip either
+                Thumbs: false,
                 Zoomable: {
                   Panzoom: {
-                    maxScale: 4
+                    minScale: 0.2,
+                    maxScale: 4,
+                    // Panzoom zooms by a hard-coded 1.5x / 0.5x per wheel tick,
+                    // which is far too coarse and cannot be configured. Its own
+                    // wheel handling is disabled here and replaced by the
+                    // proportional zoom in source/js/lightbox.js.
+                    wheelAction: false
                   }
                 }
               },

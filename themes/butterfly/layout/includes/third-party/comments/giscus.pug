@@ -1,12 +1,16 @@
 - const { use, lazyload } = theme.comments
-- const { repo, repo_id, category_id, light_theme, dark_theme, js, option } = theme.giscus
+- const { repo, repo_id, category_id, light_theme, dark_theme, js, post_reactions, option } = theme.giscus
 - const giscusUrl = js || 'https://giscus.app/client.js'
 - const giscusOriginUrl = new URL(giscusUrl).origin
+- const postReactions = post_reactions ? '1' : '0'
 
 script.
   (() => {
     const isShuoshuo = GLOBAL_CONFIG_SITE.pageType === 'shuoshuo'
     const option = !{JSON.stringify(option)}
+
+    // Moments show the emoji reaction bar, articles only a plain reply thread.
+    const reactionsEnabled = isShuoshuo ? '1' : '!{postReactions}'
 
     const getGiscusTheme = theme => theme === 'dark' ? '!{dark_theme}' : '!{light_theme}'
 
@@ -29,7 +33,7 @@ script.
         'data-repo-id': '!{repo_id}',
         'data-category-id': '!{category_id}',
         'data-theme': getGiscusTheme(document.documentElement.getAttribute('data-theme')),
-        'data-reactions-enabled': '1',
+        'data-reactions-enabled': reactionsEnabled,
         crossorigin: 'anonymous',
         async: true,
         ...option,

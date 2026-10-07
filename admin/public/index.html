@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>博客后台</title>
+<link rel="stylesheet" href="/vendor/vditor/dist/index.css">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div id="app">
+
+  <aside class="sidebar">
+    <div class="brand">博客后台</div>
+    <nav>
+      <button class="nav-item" data-view="posts">文章</button>
+      <button class="nav-item" data-view="moments">动态</button>
+      <button class="nav-item" data-view="pages">页面</button>
+      <button class="nav-item" data-view="publish">发布</button>
+    </nav>
+    <div class="sidebar-foot">
+      <div id="git-badge" class="git-badge">读取中…</div>
+    </div>
+  </aside>
+
+  <main class="main">
+
+    <!-- 文章 -->
+    <section class="view" id="view-posts">
+      <header class="view-head">
+        <h2>文章</h2>
+        <div class="view-actions">
+          <button class="btn" id="new-post">新建文章</button>
+          <button class="btn btn-primary" id="save-post" disabled>保存</button>
+        </div>
+      </header>
+      <div class="split">
+        <div class="list" id="post-list"></div>
+        <div class="editor" id="post-editor">
+          <div class="meta-form">
+            <label>标题<input id="post-title" type="text" placeholder="文章标题"></label>
+            <label>日期<input id="post-date" type="text" placeholder="2026-10-07 20:30:00"></label>
+            <label>分类<input id="post-categories" type="text" placeholder="多个用英文逗号分隔"></label>
+            <label>文件名<input id="post-file" type="text" placeholder="my-post.md"></label>
+            <label class="cover-field">
+              封面
+              <span class="cover-row">
+                <input id="post-cover" type="text" placeholder="点右侧按钮上传，或填 /img/xxx.jpg">
+                <button class="btn btn-mini" id="pick-cover" type="button">上传</button>
+                <button class="btn btn-mini" id="clear-cover" type="button">清除</button>
+              </span>
+            </label>
+          </div>
+          <div class="cover-preview" id="cover-preview" hidden>
+            <img id="cover-preview-img" alt="封面预览">
+            <span class="cover-preview-hint">文章页面顶部的横幅</span>
+          </div>
+          <div id="post-vditor" class="vditor-host"></div>
+          <div class="hint">
+            正文支持 Markdown。图片可直接粘贴或拖进来；「阅读全文」之前的内容会作为摘要显示在首页。
+            <button class="btn btn-mini" id="insert-more">插入摘要分隔</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 动态 -->
+    <section class="view" id="view-moments">
+      <header class="view-head">
+        <h2>动态</h2>
+        <div class="view-actions">
+          <button class="btn" id="new-moment">新增动态</button>
+          <button class="btn btn-primary" id="save-moment" disabled>保存</button>
+        </div>
+      </header>
+      <div class="split">
+        <div class="list" id="moment-list"></div>
+        <div class="editor" id="moment-editor">
+          <div class="meta-form">
+            <label>时间<input id="moment-date" type="text" placeholder="2026-10-07 20:30:00"></label>
+            <label>评论区标识<input id="moment-key" type="text" placeholder="保存后自动生成" readonly></label>
+          </div>
+          <div id="moment-vditor" class="vditor-host"></div>
+          <div class="hint">动态是时间线里的一条。文字、图片、视频都可以放，图片会自动排成网格。</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 页面 -->
+    <section class="view" id="view-pages">
+      <header class="view-head">
+        <h2>页面</h2>
+        <div class="view-actions">
+          <button class="btn btn-primary" id="save-page" disabled>保存</button>
+        </div>
+      </header>
+      <div class="split">
+        <div class="list" id="page-list"></div>
+        <div class="editor" id="page-editor">
+          <div class="page-head" id="page-title"></div>
+          <div id="page-vditor" class="vditor-host"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 发布 -->
+    <section class="view" id="view-publish">
+      <header class="view-head"><h2>发布</h2></header>
+      <div class="publish">
+        <p class="hint">
+          保存只是写回本地文件。要让线上更新，需要提交并推送到 GitHub ——
+          推送后 GitHub Actions 会自动重新构建网站。
+        </p>
+        <div class="field">
+          <label>提交说明<input id="commit-message" type="text" placeholder="例如：新增一篇文章"></label>
+          <button class="btn" id="btn-commit">提交</button>
+          <button class="btn btn-primary" id="btn-push">推送到 GitHub</button>
+        </div>
+        <pre id="publish-output" class="output">这里会显示命令输出。</pre>
+        <div class="field">
+          <button class="btn" id="btn-status">刷新状态</button>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script src="/vendor/vditor/dist/index.min.js"></script>
+<script src="/app.js"></script>
+</body>
+</html>

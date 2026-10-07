@@ -124,7 +124,16 @@ function safeJoin (base, rel) {
   return target
 }
 
+// Windows editors (Notepad, and PowerShell's own Out-File) may prefix a file
+// with a UTF-8 BOM. Left in place it makes the front-matter regex below fail,
+// so the post's title/date/categories would read as empty and the next save
+// would silently drop them.
+function stripBom (text) {
+  return String(text).charCodeAt(0) === 0xFEFF ? String(text).slice(1) : String(text)
+}
+
 function splitFrontMatter (raw) {
+  raw = stripBom(raw)
   const match = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/.exec(raw)
   if (!match) return { data: {}, body: raw }
   let data = {}
@@ -240,7 +249,7 @@ async function listPages () {
 
 async function readMoments () {
   if (!fs.existsSync(MOMENTS_FILE)) return []
-  const loaded = yaml.load(await fsp.readFile(MOMENTS_FILE, 'utf8'), { schema: yaml.CORE_SCHEMA })
+  const loaded = yaml.load(stripBom(await fsp.readFile(MOMENTS_FILE, 'utf8')), { schema: yaml.CORE_SCHEMA })
   if (!Array.isArray(loaded)) return []
   // keep every field, including ones this UI does not edit, so saving never
   // silently drops data the user put in the file by hand
@@ -249,18 +258,49 @@ async function readMoments () {
     .map(item => ({ ...item, date: item.date ? String(item.date) : '', content: item.content ? String(item.content) : '' }))
 }
 
+// `2026-10-7` is not a format moment recognises, and one bad date aborts the
+// whole site build. Pad anything date-like so saved data is always canonical.
+function normaliseDate (value) {
+  const match = /^(\d{4})-(\d{1,2})-(\d{1,2})(?:[ T](\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/.exec(String(value || '').trim())
+  if (!match) return String(value || '').trim()
+  const [, year, month, day, hour = '0', minute = '0', second = '0'] = match
+  const p = n => String(n).padStart(2, '0')
+  return `${year}-${p(month)}-${p(day)} ${p(hour)}:${p(minute)}:${p(second)}`
+}
+
+// Every moment needs a stable `key`: the theme passes it to giscus as the
+// discussion term, so a moment without one gets no comment thread at all.
+// A key is assigned once and must never change, or the existing comments are
+// orphaned - which is also why editing a moment's date keeps its old key.
+function assignMomentKeys (moments) {
+  const taken = new Set(moments.map(m => m.key).filter(Boolean))
+
+  for (const moment of moments) {
+    if (moment.key) continue
+    const digits = String(moment.date || '').replace(/\D/g, '').padEnd(14, '0').slice(0, 14)
+    let key = 'm' + digits
+    let n = 1
+    while (taken.has(key)) key = `m${digits}-${++n}`
+    taken.add(key)
+    moment.key = key
+  }
+
+  return moments
+}
+
 async function writeMoments (moments) {
-  const clean = (Array.isArray(moments) ? moments : [])
+  const clean = assignMomentKeys((Array.isArray(moments) ? moments : [])
     .filter(m => m && String(m.content || '').trim())
     .map(m => {
       const { date, content, ...rest } = m
-      return { date: String(date || '').trim(), content: String(content), ...rest }
+      return { date: normaliseDate(date), content: String(content), ...rest }
     })
-    .sort((a, b) => String(b.date).localeCompare(String(a.date)))
+    .sort((a, b) => String(b.date).localeCompare(String(a.date))))
 
   const header = [
     '# 动态列表，最新的排在最上面。',
     '# content 支持 Markdown，可以插入图片、视频。',
+    '# key 是这条动态的评论区标识，由后台自动生成；不要手动改，改了旧评论就看不到了。',
     ''
   ].join('\n')
 

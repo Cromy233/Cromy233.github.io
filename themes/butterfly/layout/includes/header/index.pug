@@ -13,7 +13,10 @@
 if !theme.disable_top_img && page.top_img !== false
   case globalPageType
     when 'post'
-      - top_img = page.top_img || page.cover || theme.default_top_img
+      //- A post only gets a banner when it actually has a cover, so the header
+      //- never shows the theme's flat colour band. Without one, post-info is
+      //- rendered at the top of the article instead (see layout/post.pug).
+      - top_img = page.top_img || page.cover || false
     when 'page'
       - top_img = page.top_img || theme.default_top_img
     when 'tag'
@@ -47,21 +50,22 @@ header#page-header(class=`${headerClassName + isFixedClass}` style=bg_img)
               #home-hero-avatar
                 img.no-lightbox(src=homeHero.avatar alt=homeHero.name || '' loading='eager')
             if homeHero.name
-              h1#home-hero-name= homeHero.name
+              #home-hero-id
+                h1#home-hero-name= homeHero.name
+                if homeHero.birthday
+                  span#home-hero-birthday(title='生日')
+                    i.fas.fa-cake-candles
+                    span= homeHero.birthday
             if homeHero.subtitle
               p#home-hero-subtitle= homeHero.subtitle
-            if homeHero.birthday
-              p#home-hero-birthday
-                i.fas.fa-cake-candles
-                span= homeHero.birthday
             if homeHero.links && homeHero.links.length
               nav#home-hero-links
                 each link in homeHero.links
                   - const isExternal = /^https?:\/\//.test(link.url || '')
-                  a.home-hero-link(href=url_for(link.url) target=isExternal ? '_blank' : false rel=isExternal ? 'noopener' : false)
+                  a.home-hero-link(href=url_for(link.url) target=isExternal ? '_blank' : false rel=isExternal ? 'noopener' : false title=link.name aria-label=link.name)
                     if link.icon
                       i(class=link.icon)
-                    span= link.name
+                    span.home-hero-link-label= link.name
       else
         #site-info
           h1#site-title=config.title
