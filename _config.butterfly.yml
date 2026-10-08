@@ -31,17 +31,19 @@ home_hero:
   enable: true
   # Background images. One or more. Several images cross-fade as a carousel.
   # Drop the files in source/img/hero/ and list them here.
+  # Any format the browser can show works: png / jpg / jpeg / webp / avif / gif / svg.
+  # NOTE: every path listed here must exist. A wrong path fails silently - the
+  # hero just shows nothing. `npm run build` warns about missing files.
   backgrounds:
-    - /img/hero/hero-01.svg
-    - /img/hero/hero-02.svg
-    - /img/hero/hero-03.svg
+    - /img/hero/ocean.png
   # Seconds each background stays before switching
   interval: 7
   # Avatar. A GitHub avatar URL works: https://github.com/<username>.png
   avatar: https://github.com/Cromy233.png
   name: 晓光
   subtitle: 不知道写点什么...
-  # Shown right under the subtitle
+  # Small caption to the right of the name (kept off-centre so the name stays
+  # exactly centred). Leave empty to hide.
   birthday: 2/29
   # Links under the name. `icon` accepts any Font Awesome class.
   # Add or remove entries freely; the order here is the order shown.
@@ -85,7 +87,10 @@ social:
 favicon: /img/favicon.svg
 
 avatar:
-  img: /img/avatar.svg
+  # Same image as the homepage hero, so every place an avatar appears
+  # (moments page, Open Graph / structured-data fallback) stays consistent.
+  # An absolute URL is required for the Open Graph tag anyway.
+  img: https://github.com/Cromy233.png
   effect: false
 
 # Disable all banner images
