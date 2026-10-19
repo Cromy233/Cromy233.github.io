@@ -177,6 +177,238 @@ function asList (value) {
   return Array.isArray(value) ? value : [value]
 }
 
+/* ------------------------------------------------------------------- images */
+
+const IMG_ROOT = path.join(SOURCE_DIR, 'img')
+const CONFIG_FILE = path.join(ROOT, '_config.butterfly.yml')
+
+// The two folders the image manager owns. `hero` is special: its contents are
+// only shown when they are listed in home_hero.backgrounds, so the manager also
+// edits that list. `gallery` is a plain folder.
+const IMAGE_DIRS = {
+  hero: path.join(IMG_ROOT, 'hero'),
+  gallery: path.join(IMG_ROOT, 'gallery')
+}
+
+const IMAGE_EXTS = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.avif', '.svg', '.bmp']
+
+const isImageName = name => IMAGE_EXTS.includes(path.extname(String(name)).toLowerCase())
+
+// Example paths inside fenced code blocks are documentation, not real
+// references, and the syntax highlighter splits them into <span> tags.
+function stripCode (text) {
+  return String(text || '')
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/^```[\s\S]*?^```/gm, '')
+    .replace(/^~~~[\s\S]*?^~~~/gm, '')
+    .replace(/`[^`\n]*`/g, '')
+}
+
+async function listImages (dirKey) {
+  const dir = IMAGE_DIRS[dirKey]
+  if (!dir) throw new Error('unknown folder: ' + dirKey)
+
+  let entries
+  try {
+    entries = await fsp.readdir(dir, { withFileTypes: true })
+  } catch {
+    return []
+  }
+
+  const files = []
+  for (const entry of entries) {
+    if (!entry.isFile() || !isImageName(entry.name)) continue
+    const stat = await fsp.stat(path.join(dir, entry.name))
+    files.push({
+      name: entry.name,
+      url: `/img/${dirKey}/${entry.name}`,
+      size: stat.size,
+      mtime: stat.mtimeMs
+    })
+  }
+
+  files.sort((a, b) => a.name.localeCompare(b.name, 'zh'))
+  return files
+}
+
+/** Append -2, -3, ... until the name is free, so an upload never overwrites. */
+async function uniqueName (dir, name) {
+  const ext = path.extname(name)
+  const base = path.basename(name, ext)
+  let candidate = name
+  let n = 2
+  while (fs.existsSync(path.join(dir, candidate))) {
+    candidate = `${base}-${n++}${ext}`
+  }
+  return candidate
+}
+
+// Strip anything awkward in a URL or on Windows.
+function safeImageName (name) {
+  const ext = path.extname(String(name)).toLowerCase()
+  const base = path.basename(String(name), path.extname(String(name)))
+    .replace(/[^\p{L}\p{N}._-]+/gu, '-')
+    .replace(/^[._-]+/, '')
+  return (base || 'image') + ext
+}
+
+function readHeroConfig () {
+  const cfg = yaml.load(stripBom(fs.readFileSync(CONFIG_FILE, 'utf8')), { schema: yaml.CORE_SCHEMA }) || {}
+  const hero = cfg.home_hero
+  if (!hero || typeof hero !== 'object') {
+    throw new Error('_config.butterfly.yml 里没有可用的 home_hero 配置段')
+  }
+  return {
+    enable: hero.enable !== false,
+    backgrounds: asList(hero.backgrounds).filter(Boolean).map(String),
+    interval: hero.interval === undefined || hero.interval === null ? '' : String(hero.interval)
+  }
+}
+
+/**
+ * Rewrite only the `backgrounds:` list inside `home_hero:`.
+ *
+ * Round-tripping the whole file through js-yaml would delete every comment in
+ * this 1100-line config, so the edit is a text splice: the key line and the
+ * dash items after it are replaced, everything else stays byte for byte. The
+ * result is re-parsed and compared before writing, so a bad edit can never
+ * corrupt the config.
+ */
+async function writeHeroBackgrounds (next) {
+  const original = stripBom(await fsp.readFile(CONFIG_FILE, 'utf8'))
+  const eol = original.includes('\r\n') ? '\r\n' : '\n'
+  const lines = original.split(/\r?\n/)
+
+  const heroAt = lines.findIndex(line => /^home_hero:\s*$/.test(line))
+  if (heroAt < 0) throw new Error('找不到顶格的 `home_hero:`')
+
+  // the hero block ends at the next line that starts in column 0
+  let blockEnd = lines.length
+  for (let i = heroAt + 1; i < lines.length; i++) {
+    if (/^\S/.test(lines[i])) {
+      blockEnd = i
+      break
+    }
+  }
+
+  let keyAt = -1
+  for (let i = heroAt + 1; i < blockEnd; i++) {
+    if (/^\s+backgrounds:/.test(lines[i])) {
+      keyAt = i
+      break
+    }
+  }
+  if (keyAt < 0) throw new Error('home_hero 里找不到 `backgrounds:`')
+
+  // skip blank lines between the key and the first item
+  let first = keyAt + 1
+  while (first < blockEnd && lines[first].trim() === '') first++
+
+  let last = keyAt // inclusive index of the last `- item` line
+  for (let i = first; i < blockEnd; i++) {
+    if (/^\s*-\s+/.test(lines[i])) {
+      last = i
+      continue
+    }
+    break
+  }
+
+  const keyIndent = (lines[keyAt].match(/^(\s*)/) || ['', ''])[1]
+  let itemIndent = keyIndent + '  '
+  if (last > keyAt) {
+    const match = lines[first].match(/^(\s*-\s+)/)
+    if (match) itemIndent = match[1]
+  }
+
+  const rebuilt = [
+    ...lines.slice(0, keyAt),
+    `${keyIndent}backgrounds:`,
+    ...next.map(entry => `${itemIndent}${entry}`),
+    ...lines.slice(last + 1)
+  ].join(eol)
+
+  // verify before writing: same count, same order, inside the hero block
+  const parsed = yaml.load(stripBom(rebuilt), { schema: yaml.CORE_SCHEMA }) || {}
+  const got = asList(parsed.home_hero && parsed.home_hero.backgrounds).map(String)
+  const same = got.length === next.length && got.every((v, i) => v === String(next[i]))
+  if (!same) throw new Error('改写后的配置校验失败，已放弃保存（配置文件未改动）')
+
+  await fsp.writeFile(CONFIG_FILE, rebuilt, 'utf8')
+}
+
+/**
+ * Which `/img/...` paths are referenced, and from where.
+ * Used to warn before deleting or renaming a file that is still in use.
+ */
+async function findImageReferences () {
+  const refs = new Map()
+
+  const add = (url, label) => {
+    const key = String(url || '').trim().split(/[?#]/)[0]
+    if (!key.startsWith('/img/')) return
+    if (!refs.has(key)) refs.set(key, [])
+    const list = refs.get(key)
+    if (!list.includes(label)) list.push(label)
+  }
+
+  const scan = (text, label) => {
+    const s = stripCode(text)
+    for (const m of s.matchAll(/!\[[^\]]*\]\(\s*([^)\s]+)/g)) add(m[1], label)
+    for (const m of s.matchAll(/<img[^>]*\ssrc=["']([^"']+)["']/gi)) add(m[1], label)
+    for (const m of s.matchAll(/<(?:video|audio|source)[^>]*\ssrc=["']([^"']+)["']/gi)) add(m[1], label)
+    for (const m of s.matchAll(/url\(\s*["']?([^"')]+)["']?\s*\)/g)) add(m[1], label)
+  }
+
+  // posts
+  try {
+    const postFiles = (await fsp.readdir(POSTS_DIR, { withFileTypes: true }))
+      .filter(e => e.isFile() && e.name.endsWith('.md'))
+    for (const entry of postFiles) {
+      const { data, body } = splitFrontMatter(await fsp.readFile(path.join(POSTS_DIR, entry.name), 'utf8'))
+      const label = `文章《${String(data.title || path.basename(entry.name, '.md'))}》`
+      // cover / top_img hold a bare path, they are not text to scan
+      add(data.cover, label + ' 的封面')
+      add(data.top_img, label + ' 的顶部图')
+      scan(body, label)
+    }
+  } catch {
+    // no posts yet
+  }
+
+  // pages: source/<slug>/index.md
+  try {
+    const dirs = (await fsp.readdir(SOURCE_DIR, { withFileTypes: true }))
+      .filter(e => e.isDirectory() && !e.name.startsWith('_') && !['img', 'css', 'js', 'files'].includes(e.name))
+    for (const dir of dirs) {
+      const indexFile = path.join(SOURCE_DIR, dir.name, 'index.md')
+      if (!fs.existsSync(indexFile)) continue
+      const { data, body } = splitFrontMatter(await fsp.readFile(indexFile, 'utf8'))
+      const label = `页面《${String(data.title || dir.name)}》`
+      add(data.top_img, label + ' 的顶部图')
+      scan(body, label)
+    }
+  } catch {
+    // ignore
+  }
+
+  // moments
+  const moments = await readMoments()
+  moments.forEach((item, i) => {
+    const label = `动态 #${i + 1}（${item.date || '无日期'}）`
+    scan(item.content, label)
+    add(item.avatar, label + ' 的头像')
+  })
+
+  // hero carousel
+  try {
+    readHeroConfig().backgrounds.forEach(pathname => add(pathname, '首页轮播背景'))
+  } catch {
+    // config unreadable, nothing to add
+  }
+
+  return refs
+}
+
 function run (cmd, args, cwd = ROOT) {
   return new Promise(resolve => {
     execFile(cmd, args, { cwd, maxBuffer: 16 * 1024 * 1024 }, (err, stdout, stderr) => {
@@ -422,6 +654,147 @@ async function handleApi (req, res, parsed) {
         ? `<audio src="${url}" controls style="width:100%"></audio>`
         : `[${name}](${url})`
     return sendJson(res, 200, { ok: true, kind, url, markdown })
+  }
+
+  if (route === '/images' && req.method === 'GET') {
+    const [hero, gallery, references] = await Promise.all([
+      listImages('hero'),
+      listImages('gallery'),
+      findImageReferences()
+    ])
+    return sendJson(res, 200, {
+      hero,
+      gallery,
+      config: readHeroConfig(),
+      references: Object.fromEntries(references)
+    })
+  }
+
+  if (route === '/images/upload' && req.method === 'POST') {
+    const dirKey = String(query.get('dir') || '')
+    if (!IMAGE_DIRS[dirKey]) return sendJson(res, 400, { error: 'unknown folder: ' + dirKey })
+
+    const original = path.basename(String(query.get('name') || 'image'))
+    if (!isImageName(original)) {
+      return sendJson(res, 400, { error: '只支持图片格式：' + IMAGE_EXTS.join(' ') })
+    }
+
+    const buffer = await readBody(req)
+    if (buffer.length > MAX_UPLOAD_BYTES) {
+      return sendJson(res, 400, { error: 'file is larger than 50 MB' })
+    }
+
+    const dir = IMAGE_DIRS[dirKey]
+    await fsp.mkdir(dir, { recursive: true })
+    const finalName = await uniqueName(dir, safeImageName(original))
+    await fsp.writeFile(path.join(dir, finalName), buffer)
+
+    return sendJson(res, 200, {
+      ok: true,
+      name: finalName,
+      url: `/img/${dirKey}/${finalName}`,
+      renamed: finalName !== original
+    })
+  }
+
+  if (route === '/images/rename' && req.method === 'POST') {
+    const payload = await readJsonBody(req)
+    const dirKey = String(payload.dir || '')
+    const dir = IMAGE_DIRS[dirKey]
+    if (!dir) return sendJson(res, 400, { error: 'unknown folder: ' + dirKey })
+
+    const from = path.basename(String(payload.from || ''))
+    if (!isImageName(from)) return sendJson(res, 400, { error: 'invalid source name' })
+
+    const cleaned = safeImageName(String(payload.to || ''))
+    if (!isImageName(cleaned)) return sendJson(res, 400, { error: 'invalid target name' })
+
+    const source = path.join(dir, from)
+    if (!fs.existsSync(source)) return sendJson(res, 404, { error: '文件不存在' })
+
+    if (cleaned === from) return sendJson(res, 200, { ok: true, name: from, url: `/img/${dirKey}/${from}` })
+
+    const target = path.join(dir, cleaned)
+    if (fs.existsSync(target)) return sendJson(res, 409, { error: '同名文件已存在：' + cleaned })
+
+    await fsp.rename(source, target)
+
+    // a renamed hero image would silently drop out of the carousel
+    let configUpdated = false
+    if (dirKey === 'hero') {
+      const before = readHeroConfig().backgrounds
+      const oldUrl = `/img/hero/${from}`
+      const newUrl = `/img/hero/${cleaned}`
+      if (before.includes(oldUrl)) {
+        await writeHeroBackgrounds(before.map(entry => (entry === oldUrl ? newUrl : entry)))
+        configUpdated = true
+      }
+    }
+
+    return sendJson(res, 200, {
+      ok: true,
+      name: cleaned,
+      url: `/img/${dirKey}/${cleaned}`,
+      configUpdated
+    })
+  }
+
+  if (route === '/images/delete' && req.method === 'POST') {
+    const payload = await readJsonBody(req)
+    const dirKey = String(payload.dir || '')
+    const dir = IMAGE_DIRS[dirKey]
+    if (!dir) return sendJson(res, 400, { error: 'unknown folder: ' + dirKey })
+
+    const name = path.basename(String(payload.name || ''))
+    if (!isImageName(name)) return sendJson(res, 400, { error: 'invalid name' })
+
+    const abs = path.join(dir, name)
+    if (!fs.existsSync(abs)) return sendJson(res, 404, { error: '文件不存在' })
+
+    if (payload.force !== true) {
+      const refs = await findImageReferences()
+      const used = refs.get(`/img/${dirKey}/${name}`) || []
+      if (used.length) {
+        return sendJson(res, 409, { error: 'still referenced', references: used })
+      }
+    }
+
+    await fsp.unlink(abs)
+
+    // keep the carousel in sync when a listed background is removed
+    let configUpdated = false
+    if (dirKey === 'hero') {
+      const before = readHeroConfig().backgrounds
+      const url = `/img/hero/${name}`
+      if (before.includes(url)) {
+        await writeHeroBackgrounds(before.filter(entry => entry !== url))
+        configUpdated = true
+      }
+    }
+
+    return sendJson(res, 200, { ok: true, configUpdated })
+  }
+
+  if (route === '/hero/backgrounds' && req.method === 'PUT') {
+    const payload = await readJsonBody(req)
+    const list = asList(payload.backgrounds).map(String).filter(Boolean)
+
+    for (const entry of list) {
+      if (!entry.startsWith('/img/hero/')) {
+        return sendJson(res, 400, { error: '轮播背景只能来自 /img/hero/：' + entry })
+      }
+    }
+    if (!list.length) {
+      return sendJson(res, 400, { error: '至少要保留一张背景图，否则首页顶部会是空的' })
+    }
+
+    // A file can disappear from disk without going through the admin. Blocking
+    // the save in that case would also block reordering or removing the dead
+    // entry, so report the missing files instead of refusing the write.
+    const missing = list.filter(entry => !fs.existsSync(path.join(SOURCE_DIR, entry.replace(/^\//, ''))))
+
+    await writeHeroBackgrounds(list)
+    return sendJson(res, 200, { ok: true, backgrounds: list, missing })
   }
 
   if (route === '/git' && req.method === 'POST') {

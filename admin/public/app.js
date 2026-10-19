@@ -146,6 +146,7 @@ function showView (name) {
   // build the editor for this view now that its container is visible
   const editorKey = { posts: 'post', moments: 'moment', pages: 'page' }[name]
   if (editorKey) ensureEditor(editorKey)
+  if (name === 'images') loadImages().catch(err => toast('读取图片失败：' + err.message, true))
   if (name === 'publish') refreshGit()
 }
 
@@ -556,10 +557,431 @@ async function gitAction (action, message) {
   }
 }
 
+/* -------------------------------------------------------------- image manager */
+
+const images = {
+  tab: 'hero',
+  hero: [],
+  gallery: [],
+  config: { backgrounds: [], interval: '' },
+  references: {}
+}
+
+function formatBytes (bytes) {
+  if (bytes < 1024) return bytes + ' B'
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(0) + ' KB'
+  return (bytes / 1024 / 1024).toFixed(1) + ' MB'
+}
+
+// `/img/hero/ocean.png` -> ['/img/hero/ocean.png'] lookups in references
+function refsFor (dir, name) {
+  return images.references[`/img/${dir}/${name}`] || []
+}
+
+async function loadImages () {
+  const data = await api('/api/images')
+  images.hero = data.hero
+  images.gallery = data.gallery
+  images.config = data.config
+  images.references = data.references || {}
+  renderImages()
+}
+
+function makeButton (label, onClick, extraClass) {
+  const b = document.createElement('button')
+  b.type = 'button'
+  b.className = 'btn btn-mini' + (extraClass ? ' ' + extraClass : '')
+  b.textContent = label
+  b.addEventListener('click', onClick)
+  return b
+}
+
+/** Small "被 X 引用" hint so deleting something in use is a conscious choice. */
+function makeUsedBy (dir, name) {
+  const used = refsFor(dir, name)
+  if (!used.length) return null
+  const p = document.createElement('p')
+  p.className = 'img-used-by'
+  p.textContent = '被引用：' + used.join('；')
+  return p
+}
+
+function saveHeroBackgrounds (next, successMessage) {
+  return api('/api/hero/backgrounds', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ backgrounds: next })
+  }).then(async result => {
+    if (result.missing && result.missing.length) {
+      toast('已保存，但有文件不存在：' + result.missing.map(p => p.split('/').pop()).join('、'), true)
+    } else {
+      toast(successMessage)
+    }
+    await loadImages()
+    return result
+  }).catch(err => {
+    toast(err.message, true)
+    throw err
+  })
+}
+
+function renderHeroOrder () {
+  const host = $('hero-order')
+  host.innerHTML = ''
+
+  const list = images.config.backgrounds || []
+  if (!list.length) {
+    const empty = document.createElement('div')
+    empty.className = 'img-empty'
+    empty.textContent = '轮播列表是空的，从下面「其它图片」里点「加入轮播」。'
+    host.appendChild(empty)
+  }
+
+  list.forEach((pathname, index) => {
+    const name = pathname.split('/').pop()
+    const row = document.createElement('div')
+    row.className = 'img-row'
+
+    const num = document.createElement('div')
+    num.className = 'img-row-index'
+    num.textContent = String(index + 1)
+
+    const thumb = document.createElement('div')
+    thumb.className = 'img-row-thumb'
+    const img = document.createElement('img')
+    img.src = pathname
+    img.alt = name
+    img.loading = 'lazy'
+    thumb.appendChild(img)
+
+    const main = document.createElement('div')
+    main.className = 'img-row-main'
+    const title = document.createElement('div')
+    title.className = 'img-row-name'
+    title.textContent = name
+    const sub = document.createElement('div')
+    sub.className = 'img-row-sub'
+    const exists = images.hero.some(f => `/img/hero/${f.name}` === pathname)
+    sub.textContent = exists ? '文件存在' : '⚠ 文件已不存在'
+    main.append(title, sub)
+
+    const actions = document.createElement('div')
+    actions.className = 'img-row-actions'
+
+    const move = (delta) => {
+      const next = list.slice()
+      const [item] = next.splice(index, 1)
+      next.splice(index + delta, 0, item)
+      saveHeroBackgrounds(next, '顺序已更新')
+    }
+
+    const up = makeButton('↑', () => move(-1))
+    up.disabled = index === 0
+    up.title = '上移'
+    const down = makeButton('↓', () => move(1))
+    down.disabled = index === list.length - 1
+    down.title = '下移'
+    const remove = makeButton('移出', () => {
+      if (list.length === 1) {
+        toast('至少要保留一张背景图', true)
+        return
+      }
+      if (!window.confirm(`把「${name}」从首页轮播里移除？\n（只从配置里去掉，文件不会删除）`)) return
+      saveHeroBackgrounds(list.filter(entry => entry !== pathname), '已移出轮播')
+    }, 'btn-danger')
+
+    actions.append(up, down, remove)
+    row.append(num, thumb, main, actions)
+    host.appendChild(row)
+  })
+}
+
+function renderHeroUnused () {
+  const host = $('hero-unused')
+  host.innerHTML = ''
+  const list = images.config.backgrounds || []
+  const unused = images.hero.filter(file => !list.includes(file.url))
+
+  if (!unused.length) {
+    const empty = document.createElement('div')
+    empty.className = 'img-empty'
+    empty.textContent = images.hero.length
+      ? 'hero 文件夹里的图片都已经在轮播里了。'
+      : 'hero 文件夹是空的，用上面的上传区放几张图。'
+    host.appendChild(empty)
+    return
+  }
+
+  unused.forEach(file => {
+    const card = document.createElement('div')
+    card.className = 'img-card'
+
+    const thumb = document.createElement('div')
+    thumb.className = 'img-card-thumb'
+    const img = document.createElement('img')
+    img.src = file.url
+    img.alt = file.name
+    img.loading = 'lazy'
+    thumb.appendChild(img)
+
+    const used = refsFor('hero', file.name)
+    if (used.length) {
+      const badge = document.createElement('span')
+      badge.className = 'img-card-badge'
+      badge.textContent = '被引用'
+      badge.title = used.join('；')
+      thumb.appendChild(badge)
+    }
+
+    const foot = document.createElement('div')
+    foot.className = 'img-card-foot'
+    const name = document.createElement('div')
+    name.className = 'img-card-name'
+    name.textContent = file.name
+    name.title = file.name
+    const sub = document.createElement('div')
+    sub.className = 'img-card-sub'
+    sub.textContent = formatBytes(file.size)
+
+    const actions = document.createElement('div')
+    actions.className = 'img-card-actions'
+    actions.appendChild(makeButton('加入轮播', async () => {
+      await saveHeroBackgrounds(list.concat(file.url), '已加入轮播')
+    }, 'btn-primary'))
+    actions.appendChild(makeButton('改名', () => promptRename('hero', file.name)))
+    actions.appendChild(makeButton('删除', () => deleteImage('hero', file.name), 'btn-danger'))
+
+    foot.append(name, sub, actions)
+    card.append(thumb, foot)
+    host.appendChild(card)
+  })
+}
+
+function renderGallery () {
+  const host = $('gallery-grid')
+  host.innerHTML = ''
+
+  if (!images.gallery.length) {
+    const empty = document.createElement('div')
+    empty.className = 'img-empty'
+    empty.textContent = 'gallery 文件夹是空的，用上面的上传区放几张图。'
+    host.appendChild(empty)
+    return
+  }
+
+  images.gallery.forEach(file => {
+    const card = document.createElement('div')
+    card.className = 'img-card'
+
+    const thumb = document.createElement('div')
+    thumb.className = 'img-card-thumb'
+    const img = document.createElement('img')
+    img.src = file.url
+    img.alt = file.name
+    img.loading = 'lazy'
+    thumb.appendChild(img)
+
+    const used = refsFor('gallery', file.name)
+    if (used.length) {
+      const badge = document.createElement('span')
+      badge.className = 'img-card-badge is-used'
+      badge.textContent = '被引用'
+      badge.title = used.join('；')
+      thumb.appendChild(badge)
+    }
+
+    const foot = document.createElement('div')
+    foot.className = 'img-card-foot'
+
+    const usedBy = makeUsedBy('gallery', file.name)
+    if (usedBy) foot.appendChild(usedBy)
+
+    const name = document.createElement('div')
+    name.className = 'img-card-name'
+    name.textContent = file.name
+    name.title = file.name
+    const sub = document.createElement('div')
+    sub.className = 'img-card-sub'
+    sub.textContent = formatBytes(file.size)
+
+    const actions = document.createElement('div')
+    actions.className = 'img-card-actions'
+    actions.appendChild(makeButton('复制路径', async () => {
+      try {
+        await navigator.clipboard.writeText(file.url)
+        toast('已复制：' + file.url)
+      } catch {
+        toast('复制失败，请手动复制：' + file.url, true)
+      }
+    }))
+    actions.appendChild(makeButton('改名', () => promptRename('gallery', file.name)))
+    actions.appendChild(makeButton('删除', () => deleteImage('gallery', file.name), 'btn-danger'))
+
+    foot.append(name, sub, actions)
+    card.append(thumb, foot)
+    host.appendChild(card)
+  })
+}
+
+function renderImages () {
+  renderHeroOrder()
+  renderHeroUnused()
+  renderGallery()
+
+  document.querySelectorAll('.img-tab').forEach(tab => {
+    tab.classList.toggle('active', tab.dataset.tab === images.tab)
+  })
+  document.querySelectorAll('.img-pane').forEach(pane => {
+    pane.hidden = pane.dataset.pane !== images.tab
+  })
+
+  const heroCount = images.hero.length
+  const galleryCount = images.gallery.length
+  $('img-drop-hint').textContent =
+    `当前上传到：${images.tab === 'hero' ? 'hero（首页轮播）' : 'gallery（相册）'}` +
+    `　·　hero ${heroCount} 张 / gallery ${galleryCount} 张`
+}
+
+async function promptRename (dir, name) {
+  const next = window.prompt('新的文件名（扩展名要保留）', name)
+  if (next === null || next.trim() === '' || next.trim() === name) return
+
+  const used = refsFor(dir, name)
+  if (used.length && !window.confirm(
+    `「${name}」正被以下位置引用：\n\n${used.join('\n')}\n\n改名后这些引用会失效（图片变成空白）。继续？`
+  )) return
+
+  try {
+    const result = await api('/api/images/rename', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dir, from: name, to: next.trim() })
+    })
+    toast(`已改名为 ${result.name}` + (result.configUpdated ? '，轮播配置已同步更新' : ''))
+    await loadImages()
+  } catch (err) {
+    toast('改名失败：' + err.message, true)
+  }
+}
+
+async function deleteImage (dir, name) {
+  const used = refsFor(dir, name)
+  const warning = used.length
+    ? `\n\n⚠ 它正被以下位置引用，删掉之后那些地方会变成空白：\n${used.join('\n')}`
+    : ''
+  if (!window.confirm(`删除「${name}」？此操作不可撤销。${warning}`)) return
+
+  try {
+    const result = await api('/api/images/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dir, name, force: used.length > 0 })
+    })
+    toast('已删除' + (result.configUpdated ? '，轮播配置已同步更新' : ''))
+    await loadImages()
+  } catch (err) {
+    toast('删除失败：' + err.message, true)
+  }
+}
+
+async function uploadToManager (files) {
+  const dir = images.tab
+  if (!files || !files.length) return
+
+  let saved = 0
+  for (const file of files) {
+    try {
+      const res = await fetch(`/api/images/upload?dir=${dir}&name=` + encodeURIComponent(file.name), {
+        method: 'POST',
+        body: file
+      })
+      const data = await res.json()
+      if (!res.ok || data.error) throw new Error(data.error || 'upload failed')
+      saved++
+    } catch (err) {
+      toast(`「${file.name}」上传失败：${err.message}`, true)
+    }
+  }
+
+  if (saved) {
+    toast(`已上传 ${saved} 张到 ${dir}`)
+    await loadImages()
+  }
+}
+
 /* ------------------------------------------------------------------- wiring */
 
 $('new-post').addEventListener('click', newPost)
 $('save-post').addEventListener('click', savePost)
+
+/* image manager */
+for (const tab of document.querySelectorAll('.img-tab')) {
+  tab.addEventListener('click', () => {
+    images.tab = tab.dataset.tab
+    renderImages()
+  })
+}
+
+$('img-refresh').addEventListener('click', () => {
+  loadImages().then(() => toast('已刷新')).catch(err => toast('刷新失败：' + err.message, true))
+})
+
+// picker
+const imagePickInput = document.createElement('input')
+imagePickInput.type = 'file'
+imagePickInput.accept = 'image/*'
+imagePickInput.multiple = true
+imagePickInput.addEventListener('change', () => {
+  const files = Array.from(imagePickInput.files || [])
+  imagePickInput.value = ''
+  uploadToManager(files)
+})
+$('img-pick').addEventListener('click', () => imagePickInput.click())
+
+// Drag & drop. Only file drags are intercepted, so dragging text or images
+// inside the Vditor editor keeps working normally.
+const imageView = $('view-images')
+const dropZone = $('img-drop')
+
+const isFileDrag = event => {
+  const types = event.dataTransfer && event.dataTransfer.types
+  return Boolean(types) && Array.prototype.indexOf.call(types, 'Files') !== -1
+}
+
+// stop the browser from navigating to a dropped file, but only in this view
+document.addEventListener('dragover', event => {
+  if (imageView.classList.contains('active') && isFileDrag(event)) event.preventDefault()
+})
+document.addEventListener('drop', event => {
+  if (imageView.classList.contains('active') && isFileDrag(event)) event.preventDefault()
+})
+
+;['dragenter', 'dragover'].forEach(type => {
+  imageView.addEventListener(type, event => {
+    if (!isFileDrag(event)) return
+    event.preventDefault()
+    dropZone.classList.add('is-over')
+  })
+})
+
+imageView.addEventListener('dragleave', event => {
+  if (dropZone.contains(event.relatedTarget)) return
+  if (imageView.contains(event.relatedTarget)) return
+  dropZone.classList.remove('is-over')
+})
+
+imageView.addEventListener('drop', event => {
+  if (!isFileDrag(event)) return
+  event.preventDefault()
+  dropZone.classList.remove('is-over')
+
+  const files = Array.from(event.dataTransfer.files || []).filter(file => file.type.startsWith('image/'))
+  if (!files.length) {
+    toast('只支持图片文件', true)
+    return
+  }
+  uploadToManager(files)
+})
 
 // Cover picker: reuse the same /api/upload endpoint, but set the front-matter
 // field instead of inserting anything into the body.

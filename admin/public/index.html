@@ -16,6 +16,7 @@
       <button class="nav-item" data-view="posts">文章</button>
       <button class="nav-item" data-view="moments">动态</button>
       <button class="nav-item" data-view="pages">页面</button>
+      <button class="nav-item" data-view="images">图片</button>
       <button class="nav-item" data-view="publish">发布</button>
     </nav>
     <div class="sidebar-foot">
@@ -99,6 +100,44 @@
         <div class="editor" id="page-editor">
           <div class="page-head" id="page-title"></div>
           <div id="page-vditor" class="vditor-host"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 图片 -->
+    <section class="view" id="view-images">
+      <header class="view-head">
+        <h2>图片</h2>
+        <div class="view-actions">
+          <button class="btn" id="img-refresh">刷新</button>
+        </div>
+      </header>
+
+      <div class="img-tabs">
+        <button class="img-tab active" data-tab="hero">首页轮播（hero）</button>
+        <button class="img-tab" data-tab="gallery">相册（gallery）</button>
+      </div>
+
+      <div class="img-body">
+        <div class="img-drop" id="img-drop">
+          <strong>把图片拖到这里</strong>
+          <span>或者 <button class="btn btn-mini" id="img-pick" type="button">选择文件</button>（可多选）</span>
+          <span class="img-drop-hint" id="img-drop-hint"></span>
+        </div>
+
+        <!-- 首页轮播 -->
+        <div class="img-pane" data-pane="hero">
+          <h3 class="img-h3">轮播顺序<span class="img-h3-note">顺序就是首页切换的顺序，第一张是初始背景</span></h3>
+          <div class="img-order" id="hero-order"></div>
+
+          <h3 class="img-h3">hero 文件夹里的其它图片<span class="img-h3-note">点「加入轮播」才会出现在首页</span></h3>
+          <div class="img-grid" id="hero-unused"></div>
+        </div>
+
+        <!-- 相册 -->
+        <div class="img-pane" data-pane="gallery" hidden>
+          <h3 class="img-h3">gallery 文件夹<span class="img-h3-note">这里的图不会自动显示在网站上，需要自己在文章或动态里引用</span></h3>
+          <div class="img-grid" id="gallery-grid"></div>
         </div>
       </div>
     </section>
