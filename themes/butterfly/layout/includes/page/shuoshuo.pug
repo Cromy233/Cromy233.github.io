@@ -250,6 +250,8 @@
           const input = nav.querySelector('.shuoshuo-page-input')
           input.max = totalPages
           input.placeholder = currentPage
+          // a feed with a single page needs no pager at all
+          nav.hidden = totalPages <= 1
         }
 
         const renderPage = (page) => {

@@ -5,29 +5,40 @@
 
 /* ---------- image viewer (Fancybox 6) ---------- */
 
-/* The toolbar row is removed in themes/butterfly/source/js/utils.js. Fancybox
-   then shows its own standalone close button; pin it to the corner of the
-   screen and make it round. */
-.fancybox__container .f-button.is-close-button {
+/* The built-in per-slide button is disabled in
+   themes/butterfly/source/js/utils.js; source/js/lightbox.js adds this one to
+   the viewer container so it never moves while images slide. */
+.fancybox__container .lightbox-close {
   position: fixed;
   top: 16px;
   right: 16px;
   z-index: 20;
-  --f-close-button-width: 42px;
-  --f-close-button-height: 42px;
-  --f-close-button-svg-width: 20px;
-  --f-close-button-svg-height: 20px;
-  --f-close-border-radius: 50%;
-  --f-close-button-bg: rgba(0, 0, 0, .45);
-  --f-close-button-hover-bg: rgba(0, 0, 0, .75);
-  --f-close-button-active-bg: rgba(0, 0, 0, .85);
-  --f-close-button-color: #fff;
-  --f-close-button-hover-color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, .45);
+  color: #fff;
+  cursor: pointer;
   backdrop-filter: blur(4px);
   box-shadow: 0 2px 12px rgba(0, 0, 0, .35);
+  transition: background .2s, transform .2s;
 }
 
-/* the slide no longer needs room reserved for an inline close button */
+.fancybox__container .lightbox-close:hover {
+  background: rgba(0, 0, 0, .78);
+  transform: scale(1.06);
+}
+
+.fancybox__container .lightbox-close:active { background: rgba(0, 0, 0, .9); }
+
+.fancybox__container .lightbox-close svg { display: block; }
+
+/* no room is reserved for an inline close button any more */
 .fancybox__container .fancybox__slide.has-close-btn { padding-top: 0; }
 
 /* ---------- inline players ---------- */

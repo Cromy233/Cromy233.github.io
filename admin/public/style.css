@@ -272,6 +272,128 @@ body {
   margin: 0;
 }
 
+/* ---------- moment composer (text + media, Twitter style) ---------- */
+/* No `flex: 1` here: the editor pane already scrolls, and letting this block
+   stretch made its content overflow on top of the hint below it (which then
+   swallowed clicks meant for the upload button). */
+.composer {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+}
+
+.composer-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.composer-text {
+  flex: 0 0 auto;
+  width: 100%;
+  min-height: 96px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text);
+  font: inherit;
+  line-height: 1.75;
+  resize: vertical;
+}
+
+.composer-text:focus { outline: 2px solid rgba(73, 177, 245, .35); border-color: var(--accent); }
+
+.composer-media-head { margin-top: 16px; }
+
+.composer-media-count { font-size: 11px; }
+
+.composer-media {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 8px;
+}
+
+.composer-media:empty { display: none; }
+
+.composer-thumb {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #eef1f4;
+  overflow: hidden;
+}
+
+.composer-thumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.composer-thumb-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 6px;
+  color: var(--muted);
+  font-size: 11px;
+  text-align: center;
+  word-break: break-all;
+}
+
+.composer-thumb-remove {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(17, 24, 33, .72);
+  color: #fff;
+  font-size: 13px;
+  line-height: 20px;
+  cursor: pointer;
+}
+
+.composer-thumb-remove:hover { background: var(--danger); }
+
+.composer-thumb-index {
+  position: absolute;
+  bottom: 3px;
+  left: 3px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgba(17, 24, 33, .72);
+  color: #fff;
+  font-size: 10px;
+  line-height: 16px;
+}
+
+.composer-drop {
+  margin-top: 10px;
+  padding: 12px;
+  border: 2px dashed #c9d6e2;
+  border-radius: 8px;
+  background: #fbfdff;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+  transition: border-color .2s, background .2s;
+}
+
+.composer-drop.is-over { border-color: var(--accent); background: #eef8ff; }
+
+.composer-drop-hint { display: block; margin-top: 4px; font-size: 11px; opacity: .85; }
+
 /* ---------- image manager ---------- */
 .img-tabs {
   display: flex;

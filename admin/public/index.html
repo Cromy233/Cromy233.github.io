@@ -81,8 +81,27 @@
             <label>时间<input id="moment-date" type="text" placeholder="2026-10-07 20:30:00"></label>
             <label>评论区标识<input id="moment-key" type="text" placeholder="保存后自动生成" readonly></label>
           </div>
-          <div id="moment-vditor" class="vditor-host"></div>
-          <div class="hint">动态是时间线里的一条。文字、图片、视频都可以放，图片会自动排成网格。</div>
+
+          <div class="composer">
+            <label class="composer-label" for="moment-text">文字</label>
+            <textarea id="moment-text" class="composer-text" rows="5"
+                      placeholder="说点什么…（支持 Markdown，但图片请放到下面的媒体区）"></textarea>
+
+            <div class="composer-label composer-media-head">
+              <span>媒体</span>
+              <span class="composer-media-count" id="moment-media-count">0 张</span>
+            </div>
+            <div class="composer-media" id="moment-media"></div>
+
+            <div class="composer-drop" id="moment-drop">
+              把图片拖到这里，或 <button class="btn btn-mini" id="moment-add-media" type="button">选择文件</button>
+              <span class="composer-drop-hint">也可以直接在文字框里 Ctrl+V 粘贴图片</span>
+            </div>
+          </div>
+
+          <div class="hint">
+            文字和媒体分开填，发布后会和推特一样：上面是文字，下面是图片网格（1 张单放、2 张并排、4 张 2×2、其余三列）。
+          </div>
         </div>
       </div>
     </section>

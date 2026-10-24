@@ -53,8 +53,15 @@
 }
 
 #home-hero-avatar {
-  width: 126px;
-  height: 126px;
+  /* A flex item only shrinks along the main axis. In this column container that
+     means short viewports squeeze the height while the width stays put, which
+     flattens the circle into a very wide ellipse. Keeping the item at its own
+     size (`flex: 0 0 auto`) and forcing a 1:1 aspect ratio makes it impossible
+     to distort, while the responsive width below still lets it get smaller. */
+  flex: 0 0 auto;
+  width: clamp(56px, min(17vh, 44vw), 126px);
+  height: auto;
+  aspect-ratio: 1 / 1;
   border-radius: 50%;
   overflow: hidden;
   border: 4px solid rgba(255, 255, 255, .85);
@@ -240,26 +247,65 @@
 .home-card-body p:last-child { margin-bottom: 0; }
 .home-card-body img { max-width: 100%; border-radius: 8px; }
 
-/* runs of 2+ images in one paragraph become a grid, like Bilibili */
-.home-card-body p.img-grid {
+/* ---------- image grid (Twitter / 朋友圈 style) ---------- */
+/* A run of images becomes one grid, whether they were written on the same line
+   or separated by blank lines. source/js/home.js builds the wrapper and adds
+   the --two / --four / --many modifier from the image count. */
+
+.img-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 6px;
-  align-items: start;
+  gap: 4px;
+  margin: 10px 0 12px;
+  max-width: 100%;
 }
 
-/* the theme's lightbox wraps images in <a>, which becomes the grid item */
-.home-card-body p.img-grid > a { display: block; }
+.img-grid--two,
+.img-grid--four { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.img-grid--many { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 
-/* markdown puts <br> between the images; it must not become a grid item */
-.home-card-body p.img-grid > br { display: none; }
+/* the theme's lightbox wraps each image in <a>, which becomes the grid item */
+.img-grid > a,
+.img-grid > img {
+  display: block;
+  overflow: hidden;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, .04);
+}
 
-.home-card-body p.img-grid img {
+.img-grid > a,
+.img-grid > img,
+.img-grid > a > img {
+  aspect-ratio: 1 / 1;
+}
+
+.img-grid img {
+  display: block;
   width: 100%;
-  height: auto;
+  height: 100%;
   margin: 0;
-  border-radius: 6px;
+  object-fit: cover;
+  border-radius: 8px;
 }
+
+/* a lone image keeps its own proportions, only capped so it cannot dominate */
+.home-card-body p.img-single,
+.shuoshuo-content p.img-single {
+  margin: 10px 0 12px;
+}
+
+.home-card-body p.img-single img,
+.shuoshuo-content p.img-single img {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  max-height: 520px;
+  border-radius: 8px;
+}
+
+/* a two-image grid reads better slightly landscape than dead square */
+.img-grid--two > a,
+.img-grid--two > img,
+.img-grid--two > a > img { aspect-ratio: 4 / 5; }
 
 .home-card-tax {
   display: flex;
@@ -307,11 +353,32 @@
 }
 
 @media screen and (max-width: 768px) {
-  #home-hero-avatar { width: 96px; height: 96px; }
   #home-hero-name { font-size: 1.7em; }
   #home-hero-id { margin-top: 14px; }
   #home-hero-birthday { padding-left: 10px; font-size: .76em; }
   .home-hero-link { width: 38px; height: 38px; }
   .home-card { padding: 15px 16px; }
   .home-card-title { font-size: 1.15em; }
+}
+
+/* Short viewports: the hero is a fixed 100vh, so trim the spacing and type as
+   vertical room runs out. This is what keeps the avatar able to stay a circle
+   instead of being squeezed by the flex container. */
+@media screen and (max-height: 620px) {
+  #home-hero-inner { padding: 66px 20px 26px; }
+  #home-hero-name { font-size: 1.75em; }
+  #home-hero-subtitle { margin-bottom: 14px; font-size: .95em; }
+  #home-hero-id { margin: 10px 0 4px; }
+  .home-hero-link { width: 36px; height: 36px; }
+}
+
+@media screen and (max-height: 460px) {
+  #home-hero-inner { padding: 54px 16px 14px; }
+  #home-hero-name { font-size: 1.4em; }
+  #home-hero-subtitle { margin-bottom: 10px; font-size: .86em; }
+  #home-hero-id { margin: 6px 0 2px; }
+  #home-hero-birthday { font-size: .72em; }
+  #home-hero-links { gap: 7px; }
+  .home-hero-link { width: 32px; height: 32px; }
+  .home-hero-link i { font-size: .9em; }
 }

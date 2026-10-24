@@ -107,7 +107,7 @@ const state = {
   pages: [],
   moments: [],
   post: { file: null, isNew: false },
-  moment: { index: -1 },
+  moment: { index: -1, text: '', media: [] },
   page: { path: null },
   editors: { post: null, moment: null, page: null },
   pending: { post: null, moment: null, page: null }
@@ -144,7 +144,7 @@ function showView (name) {
   }
 
   // build the editor for this view now that its container is visible
-  const editorKey = { posts: 'post', moments: 'moment', pages: 'page' }[name]
+  const editorKey = { posts: 'post', pages: 'page' }[name]
   if (editorKey) ensureEditor(editorKey)
   if (name === 'images') loadImages().catch(err => toast('读取图片失败：' + err.message, true))
   if (name === 'publish') refreshGit()
@@ -153,6 +153,169 @@ function showView (name) {
 for (const button of document.querySelectorAll('.nav-item')) {
   button.addEventListener('click', () => showView(button.dataset.view))
 }
+
+/* ------------------------------------------------------- moment composer */
+
+/* A moment is stored as markdown, but the editor keeps text and media apart so
+   it reads like composing a tweet. These two helpers are the bridge:
+   content -> { text, media } when loading, and back again when saving. */
+
+// A line counts as media when it is *only* an image / video / audio / embed.
+const MEDIA_LINE_PATTERNS = [
+  /^!\[[^\]]*\]\(\s*([^)\s]+)(?:\s+"[^"]*")?\s*\)$/,        // ![](/path)
+  /^<img[^>]*\ssrc=["']([^"']+)["'][^>]*>$/,                  // <img src="">
+  /^<video[^>]*\ssrc=["']([^"']+)["'][^>]*>(?:<\/video>)?$/,  // <video src="">
+  /^<audio[^>]*\ssrc=["']([^"']+)["'][^>]*>(?:<\/audio>)?$/,  // <audio src="">
+  /^<iframe[^>]*\ssrc=["']([^"']+)["'][^>]*>(?:<\/iframe>)?$/,
+  /^\{%\s*netease\b[^%]*%\}$/                                 // netease embed
+]
+
+function classifyMediaLine (line) {
+  const trimmed = line.trim()
+  if (!trimmed) return null
+
+  // the netease tag has no plain URL; keep the tag itself as the payload
+  if (/^\{%\s*netease\b[^%]*%\}$/.test(trimmed)) {
+    return { kind: 'embed', markdown: trimmed, url: '' }
+  }
+
+  for (const pattern of MEDIA_LINE_PATTERNS) {
+    const match = pattern.exec(trimmed)
+    if (match) {
+      const url = match[1] || ''
+      const kind = /^<video/i.test(trimmed)
+        ? 'video'
+        : /^<audio/i.test(trimmed)
+          ? 'audio'
+          : /^<iframe/i.test(trimmed) || /^!\[/i.test(trimmed) || /^<img/i.test(trimmed)
+            ? 'image'
+            : 'embed'
+      return { kind, markdown: trimmed, url }
+    }
+  }
+
+  return null
+}
+
+function splitMomentContent (content) {
+  const text = []
+  const media = []
+
+  String(content || '').split('\n').forEach(line => {
+    const item = classifyMediaLine(line)
+    if (item) media.push(item)
+    else text.push(line)
+  })
+
+  // collapse the blank runs left behind where media used to sit
+  const normalised = text.join('\n').replace(/\n{3,}/g, '\n\n').trim()
+
+  return { text: normalised, media }
+}
+
+function composeMomentContent (text, media) {
+  const body = String(text || '').trim()
+  // blank line between media keeps the YAML readable and still groups into one
+  // grid on the site (source/js/home.js merges consecutive image paragraphs)
+  const mediaBlock = media.map(item => item.markdown).join('\n\n')
+
+  if (!body) return mediaBlock
+  if (!mediaBlock) return body
+  return body + '\n\n' + mediaBlock
+}
+
+function renderMomentMedia () {
+  const host = $('moment-media')
+  host.innerHTML = ''
+
+  const media = state.moment.media
+  $('moment-media-count').textContent = media.length ? `${media.length} 张` : '0 张'
+
+  media.forEach((item, index) => {
+    const cell = document.createElement('div')
+    cell.className = 'composer-thumb'
+
+    if (item.url && item.kind === 'image') {
+      const img = document.createElement('img')
+      img.src = item.url
+      img.alt = ''
+      img.loading = 'lazy'
+      cell.appendChild(img)
+    } else {
+      const fallback = document.createElement('div')
+      fallback.className = 'composer-thumb-fallback'
+      fallback.textContent = item.kind === 'video'
+        ? '视频'
+        : item.kind === 'audio'
+          ? '音频'
+          : item.kind === 'embed'
+            ? '嵌入'
+            : (item.url.split('/').pop() || '媒体')
+      cell.appendChild(fallback)
+    }
+
+    const badge = document.createElement('span')
+    badge.className = 'composer-thumb-index'
+    badge.textContent = String(index + 1)
+
+    const remove = document.createElement('button')
+    remove.type = 'button'
+    remove.className = 'composer-thumb-remove'
+    remove.title = '移除'
+    remove.textContent = '×'
+    remove.addEventListener('click', () => {
+      state.moment.media.splice(index, 1)
+      renderMomentMedia()
+    })
+
+    cell.append(badge, remove)
+    host.appendChild(cell)
+  })
+}
+
+function loadMomentIntoEditor (moment) {
+  const parsed = splitMomentContent(moment.content)
+  state.moment.text = parsed.text
+  state.moment.media = parsed.media
+  $('moment-text').value = parsed.text
+  renderMomentMedia()
+}
+
+function addMomentMedia (items) {
+  state.moment.media = state.moment.media.concat(items)
+  renderMomentMedia()
+}
+
+async function uploadMomentFiles (files) {
+  const list = Array.from(files || []).filter(file => file.type.startsWith('image/') || file.type.startsWith('video/') || file.type.startsWith('audio/'))
+  if (!list.length) {
+    toast('只支持图片、视频、音频', true)
+    return
+  }
+
+  const added = []
+  for (const file of list) {
+    try {
+      const res = await fetch('/api/upload?name=' + encodeURIComponent(file.name), {
+        method: 'POST',
+        body: file
+      })
+      const data = await res.json()
+      if (!res.ok || data.error) throw new Error(data.error || 'upload failed')
+
+      const kind = data.kind === 'image' ? 'image' : data.kind === 'video' ? 'video' : data.kind === 'audio' ? 'audio' : 'file'
+      added.push({ kind, markdown: data.markdown, url: data.url })
+    } catch (err) {
+      toast(`「${file.name}」上传失败：${err.message}`, true)
+    }
+  }
+
+  if (added.length) {
+    addMomentMedia(added)
+    toast(`已添加 ${added.length} 个媒体`)
+  }
+}
+
 
 /* ------------------------------------------------------------------- articles */
 
@@ -234,7 +397,6 @@ function resetPostEditor () {
 
 const EDITOR_TARGETS = {
   post: { host: 'post-vditor', placeholder: '正文…支持 Markdown，图片可粘贴或拖入' },
-  moment: { host: 'moment-vditor', placeholder: '写点什么…' },
   page: { host: 'page-vditor', placeholder: '' }
 }
 
@@ -410,30 +572,33 @@ function renderMomentList () {
 function openMoment (index) {
   state.moment.index = index
   const moment = state.moments[index] || { date: '', content: '' }
-  ensureEditor('moment')
   $('moment-date').value = moment.date || ''
   $('moment-key').value = moment.key || ''
   $('save-moment').disabled = false
-  setEditorValue('moment', moment.content)
+  loadMomentIntoEditor(moment)
   renderMomentList()
 }
 
 function newMoment () {
   state.moment.index = -1
-  ensureEditor('moment')
+  state.moment.text = ''
+  state.moment.media = []
   $('moment-date').value = localStamp()
   $('moment-key').value = ''
+  $('moment-text').value = ''
   $('save-moment').disabled = false
-  setEditorValue('moment', '')
+  renderMomentMedia()
   renderMomentList()
+  $('moment-text').focus()
 }
 
 async function saveMoment () {
   const date = $('moment-date').value.trim() || localStamp()
-  const content = getEditorValue('moment')
+  const text = $('moment-text').value
+  const content = composeMomentContent(text, state.moment.media)
 
   if (!content.trim()) {
-    toast('动态内容不能为空', true)
+    toast('写点文字，或者加几张图', true)
     return
   }
 
@@ -948,12 +1113,14 @@ const isFileDrag = event => {
   return Boolean(types) && Array.prototype.indexOf.call(types, 'Files') !== -1
 }
 
-// stop the browser from navigating to a dropped file, but only in this view
+// stop the browser from navigating to a dropped file, but only in these views
+const blockedDropViews = () => [$('view-images'), $('view-moments')].filter(v => v && v.classList.contains('active'))
+
 document.addEventListener('dragover', event => {
-  if (imageView.classList.contains('active') && isFileDrag(event)) event.preventDefault()
+  if (blockedDropViews().length && isFileDrag(event)) event.preventDefault()
 })
 document.addEventListener('drop', event => {
-  if (imageView.classList.contains('active') && isFileDrag(event)) event.preventDefault()
+  if (blockedDropViews().length && isFileDrag(event)) event.preventDefault()
 })
 
 ;['dragenter', 'dragover'].forEach(type => {
@@ -1023,6 +1190,53 @@ $('insert-more').addEventListener('click', () => {
 $('new-moment').addEventListener('click', newMoment)
 $('save-moment').addEventListener('click', saveMoment)
 $('save-page').addEventListener('click', savePage)
+
+/* moment composer: media picker, drag & drop and paste */
+const momentPickInput = document.createElement('input')
+momentPickInput.type = 'file'
+momentPickInput.accept = 'image/*,video/*,audio/*'
+momentPickInput.multiple = true
+momentPickInput.addEventListener('change', () => {
+  const files = Array.from(momentPickInput.files || [])
+  momentPickInput.value = ''
+  uploadMomentFiles(files)
+})
+$('moment-add-media').addEventListener('click', () => momentPickInput.click())
+
+const momentDrop = $('moment-drop')
+const momentView = $('view-moments')
+
+;['dragenter', 'dragover'].forEach(type => {
+  momentView.addEventListener(type, event => {
+    if (!isFileDrag(event)) return
+    event.preventDefault()
+    momentDrop.classList.add('is-over')
+  })
+})
+
+momentView.addEventListener('dragleave', event => {
+  if (momentView.contains(event.relatedTarget)) return
+  momentDrop.classList.remove('is-over')
+})
+
+momentView.addEventListener('drop', event => {
+  if (!isFileDrag(event)) return
+  event.preventDefault()
+  momentDrop.classList.remove('is-over')
+  uploadMomentFiles(event.dataTransfer.files)
+})
+
+// Ctrl+V an image straight into the text box
+$('moment-text').addEventListener('paste', event => {
+  const files = Array.from(event.clipboardData?.items || [])
+    .filter(item => item.kind === 'file')
+    .map(item => item.getAsFile())
+    .filter(Boolean)
+
+  if (!files.length) return
+  event.preventDefault()
+  uploadMomentFiles(files)
+})
 
 $('btn-commit').addEventListener('click', () => gitAction('commit', $('commit-message').value))
 $('btn-push').addEventListener('click', () => gitAction('push'))

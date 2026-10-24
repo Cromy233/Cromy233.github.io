@@ -79,6 +79,11 @@
 
 .shuoshuo-navigation
   display: flex
+
+  // a class-level `display` beats the UA rule for [hidden]
+  &[hidden]
+    display: none
+
   justify-content: center
   align-items: center
   margin-top: 20px

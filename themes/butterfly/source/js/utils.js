@@ -253,6 +253,13 @@
             // Fancybox shell, so the settings have to live inside `Carousel`.
             options = {
               Hash: false,
+              // Fancybox renders a close button *per slide*, inside that
+              // slide's panzoom wrapper. During a slide change the wrapper is
+              // transformed, and a transformed ancestor makes `position: fixed`
+              // relative to it, so the button visibly travelled with the image.
+              // It is disabled here and replaced by one button that lives on the
+              // viewer container instead (see source/js/lightbox.js).
+              closeButton: false,
               Carousel: {
                 transition: 'slide',
                 // Fancybox picks the slide direction by comparing numeric
